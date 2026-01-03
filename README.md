@@ -36,14 +36,35 @@ Python 3.8 或更高版本
 
 PyQt6 库
 
-安装依赖
-bash
-pip install PyQt6
+### 简单启动方式（推荐）
+
+直接双击运行 `第一次运行.bat` 文件，该批处理文件会自动：
+
+1. 检查 Python 是否安装
+2. 检查 pip 是否可用
+3. 自动安装所需依赖
+4. 启动程序
+5. 遇到错误时显示友好提示
+
+### 手动安装依赖
+
+如果您更倾向于手动安装依赖，可以使用以下命令：
+
+```bash
+pip install -r requirements.txt
+```
+
 📖 使用指南
 运行脚本：
 
-bash
-python Folder-Comparator-GUI.py
+方法一（推荐）：双击 `第一次运行.bat` 文件
+
+方法二：手动运行
+
+```bash
+python folder-comparator-gui.py
+```
+
 选择文件夹：
 
 手动输入路径或使用浏览按钮
