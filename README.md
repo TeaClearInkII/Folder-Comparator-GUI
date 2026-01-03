@@ -1,95 +1,213 @@
-# Folder Comparator GUI
+文件夹内容比较工具（GUI版）
+一个基于 PyQt6 的 GUI 工具，用于比较两个文件夹的内容，支持文件分类和报告生成功能。
 
-A PyQt6-based GUI tool for comparing contents between two folders, with file classification and report generation capabilities.
+✨ 功能特点
+🖥️ 现代化 GUI 界面 - 使用 PyQt6 构建的用户友好界面
 
-![Python Version](https://img.shields.io/badge/python-3.8%2B-blue)
-![License](https://img.shields.io/badge/license-MIT-green)
-![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20MacOS-lightgrey)
+🔍 可视化比较 - 彩色编码结果，易于识别
 
-## ✨ Features
+📊 详细文件信息 - 显示文件名、路径和大小
 
-- 🖥️ **Modern GUI Interface** - User-friendly interface built with PyQt6
-- 🔍 **Visual Comparison** - Color-coded results for easy identification
-- 📊 **Detailed File Information** - Shows file names, paths, and sizes
-- 📁 **Automatic File Classification** - Organizes files into three categories:
-  - Files unique to Folder 1 (Green)
-  - Files unique to Folder 2 (Blue)
-  - Common files in both folders (Gray)
-- 📄 **Report Generation** - Creates detailed comparison reports in TXT format
-- 🗂️ **File Organization** - Optionally copies files to categorized folders
-- ⚡ **Multithreading** - Fast processing with progress indication
+📁 自动文件分类 - 将文件组织到三个类别中：
 
-## 🚀 Installation
+文件夹1独有的文件（绿色）
 
-### Prerequisites
-- Python 3.8 or higher
-- PyQt6 library
+文件夹2独有的文件（蓝色）
 
-### Install Dependencies
-```bash
+两个文件夹共有的文件（灰色）
+
+📄 报告生成 - 创建详细的比较报告（TXT格式）
+
+🗂️ 文件整理 - 可选将文件复制到分类文件夹中
+
+⚡ 多线程处理 - 快速处理，实时进度显示
+
+📋 拖拽支持 - 可直接拖拽文件夹到输入框
+
+🔗 快速操作 - 一键打开文件所在位置
+
+🚀 安装说明
+环境要求
+Python 3.8 或更高版本
+
+PyQt6 库
+
+安装依赖
+bash
 pip install PyQt6
-```
+📖 使用指南
+运行脚本：
 
-## 📖 Usage
+bash
+python Folder-Comparator-GUI.py
+选择文件夹：
 
-1. **Run the script:**
-   ```bash
-   python Folder-Comparator-GUI.py
-   ```
+手动输入路径或使用浏览按钮
 
-2. **Select folders:**
-   - Enter paths manually or use the browse buttons
-   - Drag and drop folders directly into the input fields
+直接将文件夹拖拽到输入框中
 
-3. **Configure options:**
-   - Choose whether to save reports
-   - Select whether to classify and copy files
+配置选项：
 
-4. **Start comparison:**
-   - Click "Start Comparison"
-   - View real-time progress and results
+选择是否保存报告
 
-5. **Review results:**
-   - Files are displayed in three color-coded tables
-   - Open file locations with one click
-   - Access generated reports and organized files
+选择是否分类和复制文件
 
-## 🖼️ Screenshots
+开始比较：
 
-*(Add screenshots of your application here)*
+点击"开始比较"按钮
 
-## 🛠️ Technical Details
+查看实时处理进度和结果
 
-### File Structure
-```
-Folder-Comparator-GUI/
-├── Folder-Comparator-GUI.py   # Main application
-├── README.md                  # This file
-├── requirements.txt           # Dependencies
-└── LICENSE                    # MIT License
-```
+查看结果：
 
-### Key Functions
-- **Drag-and-drop support** for easy folder selection
-- **Real-time progress tracking** with multithreading
-- **Color-coded UI** for intuitive results display
-- **Cross-platform compatibility** (Windows, Linux, macOS)
+文件显示在三个彩色编码的表格中
 
-## 📄 License
+一键打开文件所在位置
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+访问生成的报告和整理好的文件
 
-## 🤝 Contributing
+🖼️ 界面截图
+(在此添加应用程序的截图)
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+🛠️ 技术细节
+文件结构
+text
+文件夹比较工具/
+├── Folder-Comparator-GUI.py   # 主应用程序
+├── README.md                  # 英文说明文档
+├── README_zh.md               # 中文说明文档
+├── requirements.txt           # 依赖包列表
+└── LICENSE                    # MIT 许可证
+核心功能
+拖拽支持 - 轻松选择文件夹
 
-## 👤 Author
+实时进度跟踪 - 多线程处理，实时显示进度
 
-**你的名字**
-- GitHub: [@你的用户名](https://github.com/你的用户名)
-- Email: 你的邮箱@example.com
+彩色编码界面 - 直观的结果显示
 
-## 🙏 Acknowledgments
+跨平台兼容 - 支持 Windows、Linux、macOS
 
-- Thanks to the PyQt6 team for the excellent GUI framework
-- Inspired by various folder comparison tools
+详细报告 - 生成包含统计信息的详细报告
+
+文件整理 - 自动将文件分类复制到不同文件夹
+
+📊 输出示例
+比较完成后，工具会生成以下结构：
+
+text
+文件夹比较分析_20240103_143022/
+├── 文件夹1独有的文件/     # 包含仅存在于文件夹1的文件
+├── 文件夹2独有的文件/     # 包含仅存在于文件夹2的文件
+├── 共有的文件/          # 包含两个文件夹都有的文件
+└── 文件夹比较报告_20240103_143022.txt  # 详细比较报告
+报告内容示例：
+
+text
+文件夹比较结果报告
+============================================================
+生成时间: 2024-01-03 14:30:22
+文件夹1: C:\Users\test\folder1
+文件夹2: C:\Users\test\folder2
+============================================================
+
+只在文件夹1中的文件:
+  文件1.txt
+  文件2.jpg
+
+只在文件夹2中的文件:
+  文件3.png
+  文件4.docx
+
+两个文件夹都有的文件:
+  公共文件1.pdf
+  公共文件2.xlsx
+
+============================================================
+统计:
+文件夹1中的文件总数: 4
+文件夹2中的文件总数: 4
+共同文件数: 2
+差异文件数: 4
+❓ 常见问题
+Q: 工具支持子文件夹比较吗？
+A: 当前版本仅比较指定文件夹根目录下的文件，不包含子文件夹。未来版本可能会添加此功能。
+
+Q: 可以比较文件内容而不仅仅是文件名吗？
+A: 当前版本主要基于文件名比较。可以通过文件大小差异发现可能的内容不同，但不进行详细的二进制比较。
+
+Q: 处理大量文件时性能如何？
+A: 工具使用多线程处理，可以高效处理大量文件。建议将并发线程数设置在5-10之间以获得最佳性能。
+
+Q: 支持哪些文件编码？
+A: 工具使用UTF-8编码处理所有文本内容，包括报告生成。
+
+🔧 高级配置
+调整并发线程数
+在代码中可以调整最大线程数以获得更好的性能：
+
+python
+# 在 FolderCompareThread 类中修改
+self.max_threads = 10  # 默认值，可根据需要调整
+自定义输出目录
+默认情况下，输出目录在脚本所在文件夹。可以修改代码以指定其他位置。
+
+📄 许可证
+本项目采用 MIT 许可证 - 查看 LICENSE 文件了解详情。
+
+🤝 贡献指南
+欢迎贡献代码！请随时提交 Pull Request。
+
+开发环境设置
+克隆仓库：
+
+bash
+git clone https://github.com/你的用户名/Folder-Comparator-GUI.git
+创建虚拟环境：
+
+bash
+python -m venv venv
+source venv/bin/activate  # Linux/macOS
+venv\Scripts\activate     # Windows
+安装开发依赖：
+
+bash
+pip install -r requirements.txt
+代码规范
+遵循 PEP 8 代码风格
+
+添加适当的注释和文档字符串
+
+确保新功能有相应的测试
+
+📞 支持与反馈
+如果您遇到任何问题或有功能建议，请：
+
+检查 Issues 是否已有类似问题
+
+创建新的 Issue 描述问题或建议
+
+通过邮箱联系我们
+
+📈 版本历史
+v3.0 (当前版本)
+完整的 GUI 界面重写
+
+添加拖拽支持
+
+改进的多线程处理
+
+增强的报告功能
+
+v2.0
+添加命令行颜色输出
+
+改进文件分类逻辑
+
+添加自动报告生成
+
+v1.0
+初始版本
+
+基本文件夹比较功能
+
+简单的文件分类
