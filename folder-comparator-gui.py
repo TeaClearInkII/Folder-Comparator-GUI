@@ -271,7 +271,7 @@ class FolderCompareThread(QThread):
 class FolderCompareGUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("文件夹内容比较工具 v3.0")
+        self.setWindowTitle("文件夹内容比较工具 v0.5.1")
         self.resize(1200, 800)
         self.setAcceptDrops(True)
         
