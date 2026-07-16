@@ -371,7 +371,7 @@ class FolderCompareGUI(QWidget):
         
         # -------------------
         # 表格区域 - 使用QSplitter分割三个区域
-        self.splitter = QSplitter(Qt.Orientation.Vertical)
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
         
         # 创建三个分类的表格
         self.tables = {}
@@ -396,13 +396,12 @@ class FolderCompareGUI(QWidget):
             
             # 创建表格
             table = QTableWidget()
-            table.setColumnCount(4)  # 文件名、路径、大小、操作
-            table.setHorizontalHeaderLabels(["文件名", "路径", "大小", "操作"])
+            table.setColumnCount(3)  # 文件名、大小、操作
+            table.setHorizontalHeaderLabels(["文件名", "大小", "操作"])
             table.horizontalHeader().setStretchLastSection(True)
-            table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)  # 文件名列
-            table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)  # 路径列自适应
-            table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # 大小列
-            table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)  # 操作列
+            table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)  # 文件名列自适应
+            table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)  # 大小列
+            table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)  # 操作列
             table.setSortingEnabled(True)
             table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
             table.setAlternatingRowColors(True)
@@ -553,15 +552,6 @@ class FolderCompareGUI(QWidget):
         
         table.setItem(row, 0, filename_item)
         
-        # 路径
-        if category == "common":
-            path_text = f"文件夹1: {file_info.get('path1', '')}\n文件夹2: {file_info.get('path2', '')}"
-            path_item = QTableWidgetItem(path_text)
-        else:
-            path_item = QTableWidgetItem(file_info.get("path", ""))
-        
-        table.setItem(row, 1, path_item)
-        
         # 大小
         if category == "common":
             size1 = file_info.get("size1", 0)
@@ -586,7 +576,7 @@ class FolderCompareGUI(QWidget):
             size = file_info.get("size", 0)
             size_item = QTableWidgetItem(self.format_size(size))
         
-        table.setItem(row, 2, size_item)
+        table.setItem(row, 1, size_item)
         
         # 操作按钮
         classify_files = file_info.get("classify_files", False)
@@ -624,7 +614,7 @@ class FolderCompareGUI(QWidget):
                     copy_btn.clicked.connect(lambda checked, p=os.path.dirname(copied_path): self.open_file_location(p))
                     btn_layout.addWidget(copy_btn)
             btn_layout.addStretch()
-            table.setCellWidget(row, 3, btn_widget)
+            table.setCellWidget(row, 2, btn_widget)
         else:
             path = file_info.get("path", "")
             btn_widget = QWidget()
@@ -645,7 +635,7 @@ class FolderCompareGUI(QWidget):
                     copy_btn.clicked.connect(lambda checked, p=os.path.dirname(copied_path): self.open_file_location(p))
                     btn_layout.addWidget(copy_btn)
             btn_layout.addStretch()
-            table.setCellWidget(row, 3, btn_widget)
+            table.setCellWidget(row, 2, btn_widget)
     
     def on_finished(self, result):
         self.result_data = result
