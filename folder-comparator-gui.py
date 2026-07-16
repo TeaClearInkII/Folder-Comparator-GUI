@@ -1,14 +1,16 @@
 import os
 import sys
 import shutil
+import hashlib
 from pathlib import Path
 import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from PyQt6.QtWidgets import (QApplication, QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
                              QLineEdit, QPushButton, QCheckBox, QTextEdit, QTableWidget, 
                              QTableWidgetItem, QFileDialog, QHeaderView, QAbstractItemView, 
                              QFrame, QGroupBox, QSplitter, QProgressBar)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal
-from PyQt6.QtGui import QDesktopServices, QColor, QFont, QIcon
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QUrl
+from PyQt6.QtGui import QDesktopServices, QColor, QFont
 
 # ----------------------
 # Worker线程
@@ -19,18 +21,22 @@ class FolderCompareThread(QThread):
     file_signal = pyqtSignal(dict)
     finished_signal = pyqtSignal(dict)
     
-    def __init__(self, folder1, folder2, save_report=False, classify_files=False):
+    def __init__(self, folder1, folder2, save_report=False, classify_files=False, max_threads=10):
         super().__init__()
         self.folder1 = folder1
         self.folder2 = folder2
         self.save_report = save_report
         self.classify_files = classify_files
+        self.max_threads = max_threads
         self.output_dir = None
         
     def run(self):
         try:
-            # 获取脚本所在目录
-            script_dir = os.path.dirname(os.path.abspath(__file__))
+            # 获取程序所在目录（兼容 PyInstaller 打包）
+            if getattr(sys, 'frozen', False):
+                script_dir = os.path.dirname(sys.executable)
+            else:
+                script_dir = os.path.dirname(os.path.abspath(__file__))
             
             # 获取文件夹1中的文件列表
             self.log_signal.emit(f"正在扫描文件夹1: {self.folder1}", "blue")
@@ -58,40 +64,98 @@ class FolderCompareThread(QThread):
             total_files = len(common_files) + len(unique_in_folder1) + len(unique_in_folder2)
             processed = 0
             
+            # 预先计算输出目录（如果勾选了保存报告或分类复制）
+            timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_dir = None
+            if self.save_report or self.classify_files:
+                output_dir = os.path.join(script_dir, f"文件夹比较分析_{timestamp}")
+            
+            # 预先创建分类子目录
+            category_dirs = {
+                "folder1_unique": "文件夹1独有的文件",
+                "folder2_unique": "文件夹2独有的文件",
+                "common": "共有的文件",
+            }
+            if self.classify_files and output_dir:
+                for dir_name in category_dirs.values():
+                    os.makedirs(os.path.join(output_dir, dir_name), exist_ok=True)
+            
             # 发送文件夹1独有的文件
             for filename in unique_in_folder1:
                 processed += 1
                 self.update_progress.emit(processed, total_files, "正在处理文件夹1独有文件...")
+                src = str(files1[filename])
+                if self.classify_files and output_dir:
+                    try:
+                        shutil.copy2(src, os.path.join(output_dir, category_dirs["folder1_unique"], filename))
+                    except Exception as e:
+                        self.log_signal.emit(f"⚠ 复制失败 {filename}: {e}", "orange")
                 self.file_signal.emit({
                     "filename": filename,
                     "category": "folder1_unique",
-                    "path": str(files1[filename]),
-                    "size": os.path.getsize(files1[filename]) if os.path.exists(files1[filename]) else 0
+                    "path": src,
+                    "size": os.path.getsize(src) if os.path.exists(src) else 0,
+                    "output_dir": output_dir,
+                    "classify_files": self.classify_files
                 })
             
             # 发送文件夹2独有的文件
             for filename in unique_in_folder2:
                 processed += 1
                 self.update_progress.emit(processed, total_files, "正在处理文件夹2独有文件...")
+                src = str(files2[filename])
+                if self.classify_files and output_dir:
+                    try:
+                        shutil.copy2(src, os.path.join(output_dir, category_dirs["folder2_unique"], filename))
+                    except Exception as e:
+                        self.log_signal.emit(f"⚠ 复制失败 {filename}: {e}", "orange")
                 self.file_signal.emit({
                     "filename": filename,
                     "category": "folder2_unique",
-                    "path": str(files2[filename]),
-                    "size": os.path.getsize(files2[filename]) if os.path.exists(files2[filename]) else 0
+                    "path": src,
+                    "size": os.path.getsize(src) if os.path.exists(src) else 0,
+                    "output_dir": output_dir,
+                    "classify_files": self.classify_files
                 })
             
-            # 发送共有文件
-            for filename in common_files:
-                processed += 1
-                self.update_progress.emit(processed, total_files, "正在处理共有文件...")
-                self.file_signal.emit({
-                    "filename": filename,
-                    "category": "common",
-                    "path1": str(files1[filename]),
-                    "path2": str(files2[filename]),
-                    "size1": os.path.getsize(files1[filename]) if os.path.exists(files1[filename]) else 0,
-                    "size2": os.path.getsize(files2[filename]) if os.path.exists(files2[filename]) else 0
-                })
+            # 发送共有文件（并发哈希比较 + 复制）
+            if common_files:
+                with ThreadPoolExecutor(max_workers=self.max_threads) as executor:
+                    future_to_file = {}
+                    for filename in common_files:
+                        path1 = str(files1[filename])
+                        path2 = str(files2[filename])
+                        size1 = os.path.getsize(path1) if os.path.exists(path1) else 0
+                        size2 = os.path.getsize(path2) if os.path.exists(path2) else 0
+                        future = executor.submit(
+                            self.process_common_file,
+                            path1, path2, output_dir,
+                            category_dirs["common"], filename
+                        )
+                        future_to_file[future] = {
+                            "filename": filename,
+                            "path1": path1,
+                            "path2": path2,
+                            "size1": size1,
+                            "size2": size2,
+                        }
+                    
+                    for future in as_completed(future_to_file):
+                        processed += 1
+                        self.update_progress.emit(processed, total_files, "正在比较共有文件内容...")
+                        info = future_to_file[future]
+                        hash_match = future.result()
+                        self.file_signal.emit({
+                            "filename": info["filename"],
+                            "category": "common",
+                            "path1": info["path1"],
+                            "path2": info["path2"],
+                            "size1": info["size1"],
+                            "size2": info["size2"],
+                            "hash_match": hash_match,
+                            "output_dir": output_dir,
+                            "classify_files": self.classify_files
+                        })
             
             # 创建输出目录（如果需要）
             result = {
@@ -105,10 +169,10 @@ class FolderCompareThread(QThread):
                 "output_dir": None
             }
             
+            self.output_dir = output_dir
+            result["output_dir"] = output_dir
+            
             if self.save_report or self.classify_files:
-                timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                self.output_dir = os.path.join(script_dir, f"文件夹比较分析_{timestamp}")
-                result["output_dir"] = self.output_dir
                 
                 try:
                     os.makedirs(self.output_dir, exist_ok=True)
@@ -119,9 +183,7 @@ class FolderCompareThread(QThread):
                         self.save_report_to_file(result, report_path)
                         self.log_signal.emit(f"✅ 报告已保存: {report_path}", "green")
                     
-                    # 分类复制文件
                     if self.classify_files:
-                        self.copy_and_classify_files(result, self.output_dir)
                         self.log_signal.emit(f"✅ 文件分类复制完成!", "green")
                         
                 except Exception as e:
@@ -177,48 +239,31 @@ class FolderCompareThread(QThread):
             self.log_signal.emit(f"❌ 保存报告失败: {e}", "red")
             return False
     
-    def copy_and_classify_files(self, result, output_dir):
-        """将文件分类复制到新目录"""
+    def compare_file_hash(self, path1, path2):
+        """比较两个文件的 MD5 哈希值"""
         try:
-            # 创建子目录
-            dir1_unique = os.path.join(output_dir, "文件夹1独有的文件")
-            dir2_unique = os.path.join(output_dir, "文件夹2独有的文件")
-            dir_common = os.path.join(output_dir, "共有的文件")
-            
-            for dir_path in [dir1_unique, dir2_unique, dir_common]:
-                os.makedirs(dir_path, exist_ok=True)
-            
-            # 复制文件夹1独有的文件
-            for filename in result['unique_in_folder1']:
-                src = result['files1'][filename]
-                dst = os.path.join(dir1_unique, filename)
-                try:
-                    shutil.copy2(src, dst)
-                except Exception as e:
-                    self.log_signal.emit(f"⚠ 复制失败 {filename}: {e}", "orange")
-            
-            # 复制文件夹2独有的文件
-            for filename in result['unique_in_folder2']:
-                src = result['files2'][filename]
-                dst = os.path.join(dir2_unique, filename)
-                try:
-                    shutil.copy2(src, dst)
-                except Exception as e:
-                    self.log_signal.emit(f"⚠ 复制失败 {filename}: {e}", "orange")
-            
-            # 复制共有的文件（默认复制文件夹1中的版本）
-            for filename in result['common_files']:
-                src = result['files1'][filename]  # 使用文件夹1中的文件
-                dst = os.path.join(dir_common, filename)
-                try:
-                    shutil.copy2(src, dst)
-                except Exception as e:
-                    self.log_signal.emit(f"⚠ 复制失败 {filename}: {e}", "orange")
-            
-            return True
+            hash1 = hashlib.md5()
+            hash2 = hashlib.md5()
+            with open(path1, 'rb') as f:
+                for chunk in iter(lambda: f.read(65536), b''):
+                    hash1.update(chunk)
+            with open(path2, 'rb') as f:
+                for chunk in iter(lambda: f.read(65536), b''):
+                    hash2.update(chunk)
+            return hash1.digest() == hash2.digest()
         except Exception as e:
-            self.log_signal.emit(f"❌ 文件分类复制失败: {e}", "red")
-            return False
+            self.log_signal.emit(f"⚠ 无法比较文件哈希 {os.path.basename(path1)}: {e}", "orange")
+            return None
+    
+    def process_common_file(self, path1, path2, output_dir, category_dir, filename):
+        """处理共有文件：复制到输出目录 + 哈希比较"""
+        if output_dir and self.classify_files:
+            dst = os.path.join(output_dir, category_dir, filename)
+            try:
+                shutil.copy2(path1, dst)
+            except Exception as e:
+                self.log_signal.emit(f"⚠ 复制失败 {filename}: {e}", "orange")
+        return self.compare_file_hash(path1, path2)
 
 # ----------------------
 # GUI界面
@@ -246,7 +291,7 @@ class FolderCompareGUI(QWidget):
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("padding: 10px; background-color: #f0f0f0; border-radius: 5px;")
+        title_label.setStyleSheet("color: #1565C0; padding: 10px; background-color: #E3F2FD; border-radius: 5px;")
         control_layout.addWidget(title_label)
         
         # 功能说明
@@ -298,6 +343,10 @@ class FolderCompareGUI(QWidget):
         self.open_dir_btn.clicked.connect(self.open_output_dir)
         self.open_dir_btn.setEnabled(False)
         button_layout.addWidget(self.open_dir_btn)
+        
+        self.open_history_btn = QPushButton("打开分析目录")
+        self.open_history_btn.clicked.connect(self.open_analysis_dir)
+        button_layout.addWidget(self.open_history_btn)
         
         button_layout.addStretch()
         
@@ -377,6 +426,11 @@ class FolderCompareGUI(QWidget):
         main_layout.addWidget(self.splitter, 1)
         
         self.setLayout(main_layout)
+        # 获取程序所在目录（兼容 PyInstaller 打包）
+        if getattr(sys, 'frozen', False):
+            self.script_dir = os.path.dirname(sys.executable)
+        else:
+            self.script_dir = os.path.dirname(os.path.abspath(__file__))
         self.output_dir = None
         self.result_data = None
     
@@ -512,14 +566,22 @@ class FolderCompareGUI(QWidget):
         if category == "common":
             size1 = file_info.get("size1", 0)
             size2 = file_info.get("size2", 0)
-            size_text = f"文件夹1: {self.format_size(size1)}\n文件夹2: {self.format_size(size2)}"
+            hash_match = file_info.get("hash_match")
             
-            # 如果大小不同，用红色标记
-            if size1 != size2:
-                size_item = QTableWidgetItem(f"⚠ 大小不同\n{self.format_size(size1)} vs {self.format_size(size2)}")
-                size_item.setForeground(QColor(255, 0, 0))
+            if size1 == size2 and hash_match is True:
+                display = f"✅ 完全相同\n{self.format_size(size1)}"
+            elif size1 == size2 and hash_match is False:
+                display = f"🔴 内容不同\n{self.format_size(size1)}"
+            elif size1 != size2:
+                display = f"⚠ 大小不同\n文件夹1: {self.format_size(size1)}\n文件夹2: {self.format_size(size2)}"
             else:
-                size_item = QTableWidgetItem(f"相同大小: {self.format_size(size1)}")
+                display = f"文件夹1: {self.format_size(size1)}\n文件夹2: {self.format_size(size2)}"
+            
+            size_item = QTableWidgetItem(display)
+            if size1 == size2 and hash_match is True:
+                size_item.setForeground(QColor(0, 128, 0))
+            elif hash_match is False or size1 != size2:
+                size_item.setForeground(QColor(255, 0, 0))
         else:
             size = file_info.get("size", 0)
             size_item = QTableWidgetItem(self.format_size(size))
@@ -527,16 +589,63 @@ class FolderCompareGUI(QWidget):
         table.setItem(row, 2, size_item)
         
         # 操作按钮
+        classify_files = file_info.get("classify_files", False)
+        output_dir = file_info.get("output_dir")
+        
+        category_dir_map = {
+            "folder1_unique": "文件夹1独有的文件",
+            "folder2_unique": "文件夹2独有的文件",
+            "common": "共有的文件",
+        }
+        
         if category == "common":
-            path = file_info.get("path1", "")
+            path1 = file_info.get("path1", "")
+            path2 = file_info.get("path2", "")
+            btn_widget = QWidget()
+            btn_layout = QHBoxLayout(btn_widget)
+            btn_layout.setContentsMargins(2, 2, 2, 2)
+            btn_layout.setSpacing(4)
+            if path1 and os.path.exists(path1):
+                btn1 = QPushButton("文件夹1")
+                btn1.setToolTip("打开文件夹1中的文件位置")
+                btn1.clicked.connect(lambda checked, p=os.path.dirname(path1): self.open_file_location(p))
+                btn_layout.addWidget(btn1)
+            if path2 and os.path.exists(path2):
+                btn2 = QPushButton("文件夹2")
+                btn2.setToolTip("打开文件夹2中的文件位置")
+                btn2.clicked.connect(lambda checked, p=os.path.dirname(path2): self.open_file_location(p))
+                btn_layout.addWidget(btn2)
+            # 打开复制路径按钮
+            if classify_files and output_dir:
+                copied_path = os.path.join(output_dir, category_dir_map[category], file_info["filename"])
+                if os.path.exists(copied_path):
+                    copy_btn = QPushButton("复制件")
+                    copy_btn.setToolTip("打开分类复制后的文件位置")
+                    copy_btn.clicked.connect(lambda checked, p=os.path.dirname(copied_path): self.open_file_location(p))
+                    btn_layout.addWidget(copy_btn)
+            btn_layout.addStretch()
+            table.setCellWidget(row, 3, btn_widget)
         else:
             path = file_info.get("path", "")
-        
-        if path and os.path.exists(path):
-            open_btn = QPushButton("打开位置")
-            open_btn.clicked.connect(lambda checked, p=os.path.dirname(path): self.open_file_location(p))
-            open_btn.setMaximumWidth(80)
-            table.setCellWidget(row, 3, open_btn)
+            btn_widget = QWidget()
+            btn_layout = QHBoxLayout(btn_widget)
+            btn_layout.setContentsMargins(2, 2, 2, 2)
+            btn_layout.setSpacing(4)
+            if path and os.path.exists(path):
+                open_btn = QPushButton("打开位置")
+                open_btn.clicked.connect(lambda checked, p=os.path.dirname(path): self.open_file_location(p))
+                open_btn.setMaximumWidth(80)
+                btn_layout.addWidget(open_btn)
+            # 打开复制路径按钮
+            if classify_files and output_dir:
+                copied_path = os.path.join(output_dir, category_dir_map[category], file_info["filename"])
+                if os.path.exists(copied_path):
+                    copy_btn = QPushButton("复制件")
+                    copy_btn.setToolTip("打开分类复制后的文件位置")
+                    copy_btn.clicked.connect(lambda checked, p=os.path.dirname(copied_path): self.open_file_location(p))
+                    btn_layout.addWidget(copy_btn)
+            btn_layout.addStretch()
+            table.setCellWidget(row, 3, btn_widget)
     
     def on_finished(self, result):
         self.result_data = result
@@ -574,18 +683,26 @@ class FolderCompareGUI(QWidget):
     def open_file_location(self, path):
         """打开文件所在位置"""
         if os.path.exists(path):
-            QDesktopServices.openUrl(f"file:///{path}")
+            QDesktopServices.openUrl(QUrl.fromLocalFile(path))
         else:
             self.log_text.append(f"❌ 路径不存在: {path}")
     
     def open_output_dir(self):
         """打开输出目录"""
         if self.output_dir and os.path.exists(self.output_dir):
-            QDesktopServices.openUrl(f"file:///{self.output_dir}")
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self.output_dir))
         elif self.result_data and self.result_data.get("output_dir"):
-            QDesktopServices.openUrl(f"file:///{self.result_data['output_dir']}")
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self.result_data['output_dir']))
         else:
             self.log_text.append("❌ 输出目录不存在")
+    
+    def open_analysis_dir(self):
+        """打开历史分析目录（脚本所在目录，所有分析结果存放于此）"""
+        if self.script_dir and os.path.exists(self.script_dir):
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self.script_dir))
+            self.log_text.append(f"📂 已打开分析目录: {self.script_dir}")
+        else:
+            self.log_text.append("❌ 无法定位分析目录")
 
 # ----------------------
 # 启动
